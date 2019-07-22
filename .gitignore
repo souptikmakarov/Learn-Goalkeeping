@@ -1,0 +1,17 @@
+.idea/
+__pycache__/
+Football_1.py
+Football_2.py
+Football_3.py
+Football_4.py
+GameRunLogs/
+SavedWeights/
+GLUT.py
+IPVtest.py
+Lighting.py
+MoveCubes.py
+Movement.py
+nehe4.py
+OpenGLTest2.py
+OpenGLTest.py
+defects.txt
