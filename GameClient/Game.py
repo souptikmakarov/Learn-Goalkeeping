@@ -158,16 +158,95 @@ class Goalie:
             return (self.Center[0] + 0.1, self.Center[1] - 0.1, -11)
 
 
-class GUI:
-    def __init__(self):
-        self.direction_bar_vertices = (
-            (-2, )
+class ControlBar:
+    def __init__(self, verts, ctrl_bar, color):
+        self.Vertices = verts
+        self.Control = ctrl_bar
+        self.Edges = (
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0)
         )
-        self.elevation_bar = None
-        self.power_bar = None
+        self.Limits = [self.Vertices[1][0]+0.01, self.Vertices[0][0]-0.01]
+        self.Control_Move_Speed = 0.01
+        self.Color = color
+
+    def draw(self):
+        glPushMatrix()
+        self.draw_bar()
+        glPopMatrix()
+
+        glPushMatrix()
+        self.draw_control()
+        glPopMatrix()
 
     def draw_bar(self):
+        glBegin(GL_LINES)
+        glColor3fv((1, 1, 1))
+        for edge in self.Edges:
+            for vertex in edge:
+                glVertex3fv(self.Vertices[vertex])
+        glEnd()
 
+    def draw_control(self):
+        glLineWidth(2.0)
+        glBegin(GL_LINES)
+        glColor3fv(self.Color)
+        glVertex3fv(self.Control[0])
+        glVertex3fv(self.Control[1])
+
+        dc = list(map(list, self.Control))
+        dc[0][0] += self.Control_Move_Speed
+        dc[1][0] += self.Control_Move_Speed
+        self.Control = tuple(map(tuple, dc))
+        if round(self.Control[0][0], 2) == self.Limits[1] or round(self.Control[0][0], 2) == self.Limits[0]:
+            self.Control_Move_Speed = -self.Control_Move_Speed
+        glEnd()
+        glLineWidth(1.0)
+
+
+class GUI:
+    def __init__(self):
+        self.direction_bar = ControlBar(
+            (
+                (-2, 0.3, 1),
+                (-3, 0.3, 1),
+                (-3, 0, 1),
+                (-2, 0, 1)
+            ),
+            (
+                (-2.9, 0.3, 1),
+                (-2.9, 0, 1)
+            ),
+            (0.16, 0.33, 0.65)
+        )
+        self.elevation_bar = ControlBar(
+            (
+                (0.5, 0.3, 1),
+                (-0.5, 0.3, 1),
+                (-0.5, 0, 1),
+                (0.5, 0, 1)
+            ),
+            (
+                (-0.4, 0.3, 1),
+                (-0.4, 0, 1)
+            ),
+            (0.76, 0.19, 0.15)
+        )
+        self.power_bar = ControlBar(
+            (
+                (3, 0.3, 1),
+                (2, 0.3, 1),
+                (2, 0, 1),
+                (3, 0, 1)
+            ),
+            (
+                (2.1, 0.3, 1),
+                (2.1, 0, 1)
+            ),
+            (0.76, 0.73, 0.15)
+        )
 
 
 class Game:
@@ -186,12 +265,14 @@ class Game:
         self.goal_post = GoalPost()
         self.ground = Ground()
         self.goalie = Goalie(self.goal_post.TopLeftVertex[0], self.goal_post.TopRightVertex[0], self.goal_post.TopLeftVertex[1], self.goal_post.BottomLeftVertex[1])
+        self.gui = GUI()
         self.on_target = None
         self.saved = None
         self.isGameEnd = False
         self.animation_delay = 100
         self.gbd_old = 0
         self.gbd_new = 0
+        self.inputs_gathered = False
 
         # Set goalie to -2.6, 0.2, -11
         # self.goalie.move_to_pos(-2.6, 0.2)
@@ -211,14 +292,6 @@ class Game:
                     glTranslatef(0, -0.2, 0)
                 elif event.key == pygame.K_DOWN:
                     glTranslatef(0, 0.2, 0)
-                elif event.key == pygame.K_a:
-                    self.goalie.move_by_unit(-0.2, 0)
-                elif event.key == pygame.K_d:
-                    self.goalie.move_by_unit(0.2, 0)
-                elif event.key == pygame.K_w:
-                    self.goalie.move_by_unit(0, 0.2)
-                elif event.key == pygame.K_s:
-                    self.goalie.move_by_unit(0, -0.2)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
                     glTranslatef(0, 0, 1.0)
@@ -250,6 +323,32 @@ class Game:
         gy = self.goalie.Center[1]
         self.gbd_new = sqrt(pow(bx - gx, 2) + pow(by - gy, 2))
 
+    def get_user_input(self):
+        control_bars = [self.gui.direction_bar, self.gui.elevation_bar, self.gui.power_bar]
+        for i in range(3):
+            space_tap = False
+            while True:
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+                control_bars[i].draw()
+
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        quit()
+                    # Camera movements
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_SPACE:
+                            control_bars[i].Control_Move_Speed = 0
+                            space_tap = True
+
+                if space_tap:
+                    break
+                pygame.display.flip()
+                pygame.time.wait(10)
+
+            print(control_bars[i].Control[0][0])
+        self.inputs_gathered = True
 
     def render_next_frame(self):
         self.move_camera_or_goalie()
@@ -272,7 +371,7 @@ class Game:
 
         # Ball Animation
         glPushMatrix()
-        self.football.move()
+        # self.football.move()
         # print("{}, {}, {}".format(self.football.X, self.football.Y, self.football.Z))
         # print("{}, {}, {}".format(self.football.ROIx, self.football.ROIy, self.football.ROIz))
         # if round(self.football.X, 1) == 3.6 or round(self.football.Y, 1) == 2.4 or ceil(self.football.Z) == -11:
@@ -327,3 +426,27 @@ class Game:
     def play(self):
         while self.isGameEnd is False:
             self.render_next_frame()
+
+
+g = Game()
+while not g.inputs_gathered:
+    g.get_user_input()
+#
+# # Range -3.5 to 3.5 for goal
+# # g.football.ROIx = -0.017
+# g.football.ROIx = randrange(-35, 35)/1000
+# # Range 2.3 to 0 for goal
+# # g.football.ROIy = 0.021
+# g.football.ROIy = randrange(0, 23)/1000
+# # Range 0 to TBD
+# # g.football.ROIz = 0.11
+#
+g.play()
+# if g.on_target:
+#     if g.saved:
+#         print("Saved by the goalie!!")
+#     else:
+#         print("Scored!!")
+# else:
+#     print("Missed!!")
+# print("{}, {}, {}".format(g.football.X, g.football.Y, g.football.Z))
