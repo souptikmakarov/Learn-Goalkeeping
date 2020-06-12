@@ -159,7 +159,7 @@ class Goalie:
 
 
 class ControlBar:
-    def __init__(self, verts, ctrl_bar, color):
+    def __init__(self, verts, ctrl_bar, color, labels):
         self.Vertices = verts
         self.Control = ctrl_bar
         self.Edges = (
@@ -171,8 +171,10 @@ class ControlBar:
         self.Limits = [self.Vertices[1][0]+0.01, self.Vertices[0][0]-0.01]
         self.Control_Move_Speed = 0.01
         self.Color = color
+        self.Labels = labels
 
     def draw(self):
+        # self.render_text()
         glPushMatrix()
         self.draw_bar()
         glPopMatrix()
@@ -180,6 +182,40 @@ class ControlBar:
         glPushMatrix()
         self.draw_control()
         glPopMatrix()
+
+        glPushMatrix()
+        self.render_text()
+        glPopMatrix()
+
+    def render_text(self):
+
+        for label in self.Labels:
+            texture = glGenTextures(1)
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+            glBindTexture(GL_TEXTURE_2D, texture)
+            glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+            glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            img = pygame.font.Font(None, 30).render(label["text"], True, (255, 255, 255))
+            w, h = img.get_size()
+            data = pygame.image.tostring(img, "RGBA", 1)
+            glTexImage2D(GL_TEXTURE_2D, 0, 4, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
+            # Display texture
+            # glBindTexture(GL_TEXTURE_2D, texture)
+            # glMatrixMode(GL_PROJECTION)
+            glLoadIdentity()
+            glScale(4 / 600, 3 / 400, 1)
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+            glEnable(GL_TEXTURE_2D)
+            glTranslatef(10, 0, 0)
+            glBegin(GL_QUADS)
+            x0, y0 = 10, 10
+            for dx, dy in [(label["x"], -3), (label["x"], -2), (label["x"]+1, -2), (label["x"]+1, -3)]:
+                glVertex(x0 + dx * w, y0 + dy * h, 0)
+                glTexCoord(dy, 1 - dx)
+            glEnd()
+            glDeleteTextures(GL_TEXTURE_2D)
+            glDisable(GL_BLEND)
 
     def draw_bar(self):
         glBegin(GL_LINES)
@@ -205,6 +241,20 @@ class ControlBar:
         glEnd()
         glLineWidth(1.0)
 
+    def get_mapped_value(self, rightMin, rightMax):
+        # Figure out how 'wide' each range is
+        leftMin = self.Vertices[1][0]
+        leftMax = self.Vertices[0][0]
+        value = self.Control[0][0]
+        leftSpan = leftMax - leftMin
+        rightSpan = rightMax - rightMin
+
+        # Convert the left range into a 0-1 range (float)
+        valueScaled = float(value - leftMin) / float(leftSpan)
+
+        # Convert the 0-1 range into a value in the right range.
+        return rightMin + (valueScaled * rightSpan)
+
 
 class GUI:
     def __init__(self):
@@ -219,7 +269,13 @@ class GUI:
                 (-2.9, 0.3, 1),
                 (-2.9, 0, 1)
             ),
-            (0.16, 0.33, 0.65)
+            (0.16, 0.33, 0.65),
+            [
+                {
+                    "text": "Direction",
+                    "x": -6
+                }
+            ]
         )
         self.elevation_bar = ControlBar(
             (
@@ -232,7 +288,13 @@ class GUI:
                 (-0.4, 0.3, 1),
                 (-0.4, 0, 1)
             ),
-            (0.76, 0.19, 0.15)
+            (0.76, 0.19, 0.15),
+            [
+                {
+                    "text": "Elevation -->",
+                    "x": 0
+                }
+            ]
         )
         self.power_bar = ControlBar(
             (
@@ -245,8 +307,19 @@ class GUI:
                 (2.1, 0.3, 1),
                 (2.1, 0, 1)
             ),
-            (0.76, 0.73, 0.15)
+            (0.76, 0.73, 0.15),
+            [
+                {
+                    "text": "Power -->",
+                    "x": 4
+                }
+            ]
         )
+
+    def reset_gui(self):
+        self.power_bar.Control_Move_Speed = 0.01
+        self.direction_bar.Control_Move_Speed = 0.01
+        self.elevation_bar.Control_Move_Speed = 0.01
 
 
 class Game:
@@ -273,7 +346,7 @@ class Game:
         self.gbd_old = 0
         self.gbd_new = 0
         self.inputs_gathered = False
-
+        self.control_bars = [self.gui.power_bar, self.gui.direction_bar, self.gui.elevation_bar]
         # Set goalie to -2.6, 0.2, -11
         # self.goalie.move_to_pos(-2.6, 0.2)
 
@@ -324,13 +397,14 @@ class Game:
         self.gbd_new = sqrt(pow(bx - gx, 2) + pow(by - gy, 2))
 
     def get_user_input(self):
-        control_bars = [self.gui.direction_bar, self.gui.elevation_bar, self.gui.power_bar]
+
+        roi = []
         for i in range(3):
             space_tap = False
             while True:
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-                control_bars[i].draw()
+                self.control_bars[i].draw()
 
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
@@ -339,7 +413,7 @@ class Game:
                     # Camera movements
                     elif event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_SPACE:
-                            control_bars[i].Control_Move_Speed = 0
+                            self.control_bars[i].Control_Move_Speed = 0
                             space_tap = True
 
                 if space_tap:
@@ -347,10 +421,22 @@ class Game:
                 pygame.display.flip()
                 pygame.time.wait(10)
 
-            print(control_bars[i].Control[0][0])
+            # print(control_bars[i].Control[0][0])
+            if i == 1:
+                limit = 3.6 * roi[0] / 11
+                roi.append(self.control_bars[i].get_mapped_value(-limit, limit))
+                # print(control_bars[i].get_mapped_value(-0.035, 0.035))
+            elif i == 2:
+                limit = 2.4 * roi[0] / 11
+                roi.append(self.control_bars[i].get_mapped_value(0, limit))
+                # print(control_bars[i].get_mapped_value(0, 0.023))
+            elif i == 0:
+                roi.append(self.control_bars[i].get_mapped_value(0.11, 0.20))
+                # print(control_bars[i].get_mapped_value(0.11, 0.12))
         self.inputs_gathered = True
+        return roi
 
-    def render_next_frame(self):
+    def render_next_frame(self, score):
         self.move_camera_or_goalie()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -371,7 +457,7 @@ class Game:
 
         # Ball Animation
         glPushMatrix()
-        # self.football.move()
+        self.football.move()
         # print("{}, {}, {}".format(self.football.X, self.football.Y, self.football.Z))
         # print("{}, {}, {}".format(self.football.ROIx, self.football.ROIy, self.football.ROIz))
         # if round(self.football.X, 1) == 3.6 or round(self.football.Y, 1) == 2.4 or ceil(self.football.Z) == -11:
@@ -380,20 +466,29 @@ class Game:
         self.football.draw()
         glPopMatrix()
 
+        # Keep showing control bars
+        self.control_bars[0].draw()
+        self.control_bars[1].draw()
+        self.control_bars[2].draw()
+
         self.check_goal()
         self.is_goal_saved()
         self.calc_goalie_ball_distance()
         if self.on_target is not None:
-            print("Goalie Final: {}, {}, {}".format(self.goalie.Center[0], self.goalie.Center[1], self.goalie.Center[2]))
-            print("On Target? {}, Saved? {}".format(self.on_target, self.saved))
+            # print("Ball Final: {}, {}, {}".format(self.football.X, self.football.Y, self.football.Z))
+            # print("Goalie Final: {}, {}, {}".format(self.goalie.Center[0], self.goalie.Center[1], self.goalie.Center[2]))
+            # print("On Target? {}, Saved? {}".format(self.on_target, self.saved))
             if self.on_target:
                 # print("Scored!!")
                 if self.saved is False:
+                    print("Scored!!!")
                     self.football.Color = (0.42, 0.78, 0.125)
+                else:
+                    print("Saved by the goalie")
                 self.football.stop_moving()
                 self.isGameEnd = True
             else:
-                # print("Missed!!")
+                print("Missed!!")
                 self.football.stop_moving()
                 self.isGameEnd = True
 
@@ -422,15 +517,30 @@ class Game:
                 self.football.stop_moving()
                 self.isGameEnd = True
 
-
     def play(self):
         while self.isGameEnd is False:
             self.render_next_frame()
 
+    def reset_game(self):
+        self.football = Football()
+        self.goalie = Goalie(self.goal_post.TopLeftVertex[0], self.goal_post.TopRightVertex[0], self.goal_post.TopLeftVertex[1], self.goal_post.BottomLeftVertex[1])
+        self.gui = GUI()
+        self.gui.reset_gui()
+        self.control_bars = [self.gui.power_bar, self.gui.direction_bar, self.gui.elevation_bar]
+        self.on_target = None
+        self.saved = None
+        self.isGameEnd = False
+        self.gbd_old = 0
+        self.gbd_new = 0
+        self.inputs_gathered = False
 
-g = Game()
-while not g.inputs_gathered:
-    g.get_user_input()
+
+# g = Game()
+# while not g.inputs_gathered:
+
+# roi = g.get_user_input()
+# print(g.inputs_gathered)
+# print(roi)
 #
 # # Range -3.5 to 3.5 for goal
 # # g.football.ROIx = -0.017
@@ -441,7 +551,7 @@ while not g.inputs_gathered:
 # # Range 0 to TBD
 # # g.football.ROIz = 0.11
 #
-g.play()
+# g.play()
 # if g.on_target:
 #     if g.saved:
 #         print("Saved by the goalie!!")

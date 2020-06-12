@@ -24,7 +24,7 @@ def run():
         gameData.BallROI = [game.football.ROIx, game.football.ROIy]
         gameData.GameId = counter_games
         reward = 0
-        agent.model_save_file = "SavedWeights/model_weight_{}".format(floor(counter_games/100))
+        agent.model_save_file = "SavedWeights/model_weight_{}.h5".format(floor(counter_games/100))
         while not game.isGameEnd:
             # agent.epsilon is set to give randomness to actions
             agent.epsilon = 80 - counter_games

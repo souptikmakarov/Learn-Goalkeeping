@@ -2,13 +2,25 @@
 from keras.optimizers import RMSprop
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout
+import numpy as np
 
 class AI_Goalie:
     def __init__(self):
-        self.model_save_file = "GameRunLog-2207-110959"
+        self.model_save_file = "GameRunLog-2207-110959.h5"
         self.learning_rate = 0.0005
         self.state_len = 8
         self.model = self.network(self.model_save_file)
+
+    def get_state(self, game):
+        state = [game.football.X,
+                 game.football.Y,
+                 game.football.Z,
+                 game.football.prevX,
+                 game.football.prevY,
+                 game.football.prevZ,
+                 game.goalie.Prev_Pos[0],
+                 game.goalie.Prev_Pos[1]]
+        return np.asarray(state)
 
     def network(self, weights=None):
         model = Sequential()
